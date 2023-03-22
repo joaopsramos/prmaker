@@ -7,7 +7,7 @@ use crate::flush_line;
 
 const YT_ISSUE_REGEX: &str = r"^\w+/(\w+-\d+)";
 const BASE_REGEX: &str = r":([\w-]+)/";
-const REPO_REGEX: &str = r"/([\w-]+).git";
+const REPO_REGEX: &str = r"/([\w-]+)$";
 
 pub struct PR {
     pub branch: String,
