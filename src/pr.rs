@@ -5,7 +5,7 @@ use std::{fmt::Display, io, process::Command};
 
 use crate::flush_line;
 
-const YT_ISSUE_REGEX: &str = r"^\w+/(\w+-\d+)";
+const YT_ISSUE_REGEX: &str = r"^\w+/([a-zA-Z\-\d+/]+)/\w+";
 const BASE_REGEX: &str = r":([\w-]+)/";
 const REPO_REGEX: &str = r"/([\w-]+)(.git)?$";
 
@@ -26,10 +26,10 @@ impl PR {
         let remote_url = get_remote_url();
         let base = get_base(&remote_url);
         let repo = get_repo(&remote_url);
+        let current_branch = get_current_branch();
 
         print!("\n");
 
-        let current_branch = get_current_branch();
         let title = get_pr_title();
         let yt_issue = get_yt_issue(&current_branch);
         let body = get_pr_body();
@@ -111,9 +111,7 @@ Remote: {}",
 
 fn get_remote_url() -> String {
     let stdout = Command::new("git")
-        .arg("config")
-        .arg("--get")
-        .arg("remote.origin.url")
+        .args(["config", "--get", "remote.origin.url"])
         .output()
         .expect("failed to run `git config --get remote.origin.url`")
         .stdout;
@@ -124,10 +122,7 @@ fn get_remote_url() -> String {
 }
 
 fn get_base(remote_url: &str) -> String {
-    let err = format!(
-        "Failed to get the user/org name from remote url: {}",
-        remote_url
-    );
+    let err = format!("Failed to get the user/org name from remote url: {remote_url}");
     let re = Regex::new(BASE_REGEX).unwrap();
 
     re.captures(remote_url)
@@ -139,10 +134,7 @@ fn get_base(remote_url: &str) -> String {
 }
 
 fn get_repo(remote_url: &str) -> String {
-    let err = format!(
-        "Failed to get the repo name from remote url: {}",
-        remote_url
-    );
+    let err = format!("Failed to get the repo name from remote url: {remote_url}");
     let re = Regex::new(REPO_REGEX).unwrap();
 
     re.captures(remote_url)
@@ -155,8 +147,7 @@ fn get_repo(remote_url: &str) -> String {
 
 fn get_current_branch() -> String {
     let stdout = Command::new("git")
-        .arg("branch")
-        .arg("--show-current")
+        .args(["branch", "--show-current"])
         .output()
         .expect("failed to run `git branch --show-current`")
         .stdout;
@@ -181,9 +172,15 @@ fn get_yt_issue(branch: &str) -> String {
 
 fn get_yt_issue_from_branch_name(branch: &str) -> Option<String> {
     let re = Regex::new(YT_ISSUE_REGEX).unwrap();
-    let issue = re.captures(branch)?.get(1)?.as_str();
+    let issues = re
+        .captures(branch)?
+        .get(1)?
+        .as_str()
+        .split("/")
+        .collect::<Vec<&str>>()
+        .join(", ");
 
-    Some(issue.to_owned())
+    Some(issues.to_owned())
 }
 
 fn request_yt_issue() -> String {
@@ -216,9 +213,7 @@ fn get_pr_title() -> String {
 
 fn get_last_commit() -> String {
     let stdout = Command::new("git")
-        .arg("log")
-        .arg("-1")
-        .arg("--pretty=format:%s")
+        .args(["log", "-1", "--pretty=format:%s"])
         .output()
         .expect("failed to run `git log -1 --pretty=%s`")
         .stdout;
@@ -245,22 +240,13 @@ fn get_pr_body() -> String {
     }
 }
 
-fn build_full_pr_body(title: &str, yt_issue: &str) -> String {
-    format!("\
-### What does this PR do?
+fn build_full_pr_body(body: &str, issue: &str) -> String {
+    let template = include_str!("../pull_request_template.md");
 
-{}
-
-<!--
-Please include a summary of the change and/or which issue is fixed. Please also include relevant motivation and context. List any dependencies that are required for this change, also provide (if appropriate) any evidence - screenshots, gifs, logs, etc.
-
-Oh, remember to follow conventional commits (https://conventionalcommits.org) on pull request title ;)
--->
-
----
-
-**Related issue:** {}
-", title, yt_issue)
+    template
+        .replace("{body}", body)
+        .replace("{issue}", issue)
+        .to_owned()
 }
 
 fn get_pr_link(pr: &PullRequest) -> String {
@@ -272,4 +258,42 @@ fn get_pr_link(pr: &PullRequest) -> String {
         html_url.host().unwrap(),
         html_url.path()
     )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_yt_issue_regex() {
+        let branches = [
+            "fix/CT-1111/fix-something",
+            "fix/CT-1111/CT-2222/CT-3333/another-fix",
+        ];
+
+        let yt_issues = branches.map(|b| get_yt_issue_from_branch_name(b).unwrap());
+
+        assert_eq!(yt_issues, ["CT-1111", "CT-1111, CT-2222, CT-3333"]);
+        assert_eq!(None, get_yt_issue_from_branch_name("fix/something"));
+    }
+
+    #[test]
+    fn build_full_pr_body_test() {
+        let expected = "### What does this PR do?
+
+Title
+
+<!--
+Please include a summary of the change and/or which issue is fixed. Please also include relevant motivation and context. List any dependencies that are required for this change, also provide (if appropriate) any evidence - screenshots, gifs, logs, etc.
+
+Oh, remember to follow conventional commits (https://conventionalcommits.org) on pull request title ;)
+-->
+
+---
+
+**Related issue:** CT-1111
+";
+
+        assert_eq!(expected, build_full_pr_body("Title", "CT-1111"));
+    }
 }

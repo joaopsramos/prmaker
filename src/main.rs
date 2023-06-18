@@ -1,3 +1,4 @@
+mod inspect;
 mod pr;
 
 use colored::Colorize;
@@ -6,6 +7,7 @@ use std::{
     env,
     fmt::Display,
     io::{self, Write},
+    process::exit,
 };
 
 const GITHUB_TOKEN_VAR: &str = "GITHUB_TOKEN";
@@ -31,7 +33,7 @@ async fn main() {
     println!("\nCreating PR...");
 
     if pr.create(&octocrab).await.is_err() {
-        exit_with_code(1)
+        exit(1)
     }
 
     println!("\nAssigning to you...");
@@ -78,7 +80,7 @@ fn get_user() -> String {
             "{}",
             format!("Couldn't get {} environment variable", GITHUB_USER_VAR).red()
         );
-        exit_with_code(1);
+        exit(1);
     })
 }
 
@@ -89,7 +91,7 @@ fn get_token() -> String {
             format!("Couldn't get {} environment variable", GITHUB_TOKEN_VAR).red()
         );
         println!("Please ensure the variable is available and it is a valid token");
-        exit_with_code(1);
+        exit(1);
     })
 }
 
@@ -105,7 +107,7 @@ fn proceed_question() {
             "y" => break,
             "n" => {
                 println!("\nClosing...");
-                exit_with_code(0);
+                exit(0);
             }
             _ => {
                 println!(
@@ -155,6 +157,7 @@ fn get_reviewers(collaborators: Page<User>) -> Vec<Reviewer> {
 
 fn get_selected_reviewers(collaborators: Page<User>) -> Vec<Reviewer> {
     let mut reviewers = get_reviewers(collaborators);
+
     loop {
         let mut opt = String::new();
 
@@ -178,9 +181,8 @@ fn get_selected_reviewers(collaborators: Page<User>) -> Vec<Reviewer> {
                 if let Some(reviewer) = reviewers.iter_mut().find(|r| r.index == index) {
                     reviewer.selected = !reviewer.selected
                 } else {
-                    println!("{}", "Reviewer not found".red());
+                    println!("{}", "Reviewer not found".red())
                 }
-                ()
             }
             Err(_) => println!("{}", "Invalid option, it must be a valid number".red()),
         }
@@ -191,10 +193,6 @@ fn get_selected_reviewers(collaborators: Page<User>) -> Vec<Reviewer> {
         .into_iter()
         .filter(|r| r.selected)
         .collect()
-}
-
-fn exit_with_code(code: i32) -> ! {
-    std::process::exit(code)
 }
 
 fn flush_line() {
