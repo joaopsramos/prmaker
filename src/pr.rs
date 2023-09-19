@@ -28,7 +28,7 @@ impl PR {
         let repo = get_repo(&remote_url);
         let current_branch = get_current_branch();
 
-        print!("\n");
+        println!();
 
         let title = get_pr_title();
         let yt_issue = get_yt_issue(&current_branch);
@@ -158,7 +158,7 @@ fn get_current_branch() -> String {
 }
 
 fn get_yt_issue(branch: &str) -> String {
-    match get_yt_issue_from_branch_name(&branch) {
+    match get_yt_issue_from_branch_name(branch) {
         Some(yt_issue) => yt_issue,
         None => {
             println!(
@@ -176,7 +176,7 @@ fn get_yt_issue_from_branch_name(branch: &str) -> Option<String> {
         .captures(branch)?
         .get(1)?
         .as_str()
-        .split("/")
+        .split('/')
         .collect::<Vec<&str>>()
         .join(", ");
 
